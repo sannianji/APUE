@@ -1,0 +1,516 @@
+apue.3e/
+├── advio
+│   ├── deadlock.c
+│   ├── fixup.awk
+│   ├── lockfile.c
+│   ├── Makefile
+│   ├── mandatory.c
+│   ├── mcopy2.c
+│   ├── nonblockw.c
+│   ├── readn.c
+│   ├── rot13a.c
+│   ├── rot13c2.c.in
+│   └── writen.c
+├── daemons
+│   ├── init.c
+│   ├── Makefile
+│   ├── reread2.c
+│   ├── reread.c
+│   └── single.c
+├── datafiles
+│   ├── getpwnam.c
+│   ├── Makefile
+│   └── strftime.c
+├── db
+│   ├── apue_db.h
+│   ├── db.c
+│   ├── Makefile
+│   └── t4.c
+├── DISCLAIMER
+├── environ
+│   ├── cmd1.c
+│   ├── cmd2.c
+│   ├── doatexit.c
+│   ├── echoarg.c
+│   ├── getrlimit.c
+│   ├── hello1.c
+│   ├── Makefile
+│   ├── opendata.c
+│   ├── scope.c
+│   └── testjmp.c
+├── exercises
+│   ├── asyncsocket.c
+│   ├── bo.c
+│   ├── fifo1.c
+│   ├── fmemopen.c
+│   ├── getlogin.c
+│   ├── getpw44bsd.c
+│   ├── getpwsvr4.c
+│   ├── goodexit.c
+│   ├── longpath.c
+│   ├── Makefile
+│   ├── openmax.c
+│   ├── pendlock.c
+│   ├── pollmsg2.c
+│   ├── prtime.c
+│   ├── sizepipe.c
+│   ├── sleep.c
+│   ├── sleepus_poll.c
+│   ├── sleepus_select.c
+│   ├── vfork3.c
+│   └── zombie.c
+├── figlinks
+│   ├── fig10.10 -> ../signals/read1.c
+│   ├── fig10.11 -> ../signals/read2.c
+│   ├── fig10.12 -> ../signals/setops.c
+│   ├── fig10.14 -> ../lib/prmask.c
+│   ├── fig10.15 -> ../signals/critical.c
+│   ├── fig10.18 -> ../lib/signal.c
+│   ├── fig10.19 -> ../lib/signalintr.c
+│   ├── fig10.2 -> ../signals/sigusr.c
+│   ├── fig10.20 -> ../signals/mask.c
+│   ├── fig10.22 -> ../signals/suspend1.c
+│   ├── fig10.23 -> ../signals/suspend2.c
+│   ├── fig10.24 -> ../lib/tellwait.c
+│   ├── fig10.25 -> ../signals/abort.c
+│   ├── fig10.26 -> ../signals/systest2.c
+│   ├── fig10.28 -> ../signals/system.c
+│   ├── fig10.29 -> ../lib/sleep.c
+│   ├── fig10.31 -> ../signals/sigtstp.c
+│   ├── fig10.5 -> ../signals/reenter.c
+│   ├── fig10.6 -> ../signals/child.c
+│   ├── fig10.7 -> ../signals/sleep1.c
+│   ├── fig10.8 -> ../signals/sleep2.c
+│   ├── fig10.9 -> ../signals/tsleep2.c
+│   ├── fig1.10 -> ../intro/shell2.c
+│   ├── fig11.10 -> ../threads/mutex1.c
+│   ├── fig11.11 -> ../threads/mutex2.c
+│   ├── fig11.12 -> ../threads/mutex3.c
+│   ├── fig11.14 -> ../threads/rwlock.c
+│   ├── fig11.15 -> ../threads/condvar.c
+│   ├── fig11.16 -> ../threads/barrier.c
+│   ├── fig11.2 -> ../threads/threadid.c
+│   ├── fig11.3 -> ../threads/exitstatus.c
+│   ├── fig11.4 -> ../threads/badexit2.c
+│   ├── fig11.5 -> ../threads/cleanup.c
+│   ├── fig12.11 -> ../threadctl/getenv1.c
+│   ├── fig12.12 -> ../threadctl/getenv2.c
+│   ├── fig12.13 -> ../threadctl/getenv3.c
+│   ├── fig12.16 -> ../threadctl/suspend.c
+│   ├── fig12.17 -> ../threadctl/atfork.c
+│   ├── fig12.4 -> ../threadctl/detach.c
+│   ├── fig12.8 -> ../threadctl/timeout.c
+│   ├── fig1.3 -> ../intro/ls1.c
+│   ├── fig13.1 -> ../daemons/init.c
+│   ├── fig13.6 -> ../daemons/single.c
+│   ├── fig13.7 -> ../daemons/reread.c
+│   ├── fig13.8 -> ../daemons/reread2.c
+│   ├── fig13.9 -> ../lib/setfd.c
+│   ├── fig1.4 -> ../intro/mycat.c
+│   ├── fig14.1 -> ../advio/nonblockw.c
+│   ├── fig14.12 -> ../advio/mandatory.c
+│   ├── fig14.20 -> ../advio/rot13a.c
+│   ├── fig14.21 -> ../advio/rot13c2.c
+│   ├── fig14.24 -> ../advio/writen.c
+│   ├── fig14.27 -> ../advio/mcopy2.c
+│   ├── fig14.5 -> ../lib/lockreg.c
+│   ├── fig14.6 -> ../lib/locktest.c
+│   ├── fig14.7 -> ../advio/deadlock.c
+│   ├── fig14.9 -> ../advio/lockfile.c
+│   ├── fig1.5 -> ../intro/getcputc.c
+│   ├── fig15.11 -> ../ipc1/popen2.c
+│   ├── fig15.12 -> ../ipc1/popen.c
+│   ├── fig15.14 -> ../ipc1/myuclc.c
+│   ├── fig15.15 -> ../ipc1/popen1.c
+│   ├── fig15.17 -> ../ipc1/add2.c
+│   ├── fig15.18 -> ../ipc1/pipe4.c
+│   ├── fig15.19 -> ../ipc1/add2stdio.c
+│   ├── fig15.31 -> ../ipc1/tshm.c
+│   ├── fig15.33 -> ../ipc1/devzero.c
+│   ├── fig15.35 -> ../ipc1/slock.c
+│   ├── fig15.5 -> ../ipc1/pipe1.c
+│   ├── fig15.6 -> ../ipc1/pipe2.c
+│   ├── fig15.7 -> ../ipc1/tellwait.c
+│   ├── fig1.6 -> ../intro/hello.c
+│   ├── fig16.10 -> ../sockets/clconn.c
+│   ├── fig16.11 -> ../sockets/clconn2.c
+│   ├── fig16.12 -> ../sockets/initsrv1.c
+│   ├── fig16.16 -> ../sockets/ruptime.c
+│   ├── fig16.17 -> ../sockets/ruptimed.c
+│   ├── fig16.18 -> ../sockets/ruptimed-fd.c
+│   ├── fig16.19 -> ../sockets/ruptime-dg.c
+│   ├── fig16.20 -> ../sockets/ruptimed-dg.c
+│   ├── fig16.22 -> ../sockets/initsrv2.c
+│   ├── fig16.9 -> ../sockets/findsvc.c
+│   ├── fig1.7 -> ../intro/shell1.c
+│   ├── fig17.10 -> ../lib/cliconn.c
+│   ├── fig17.12 -> ../lib/senderr.c
+│   ├── fig17.13 -> ../lib/sendfd.c
+│   ├── fig17.14 -> ../lib/recvfd.c
+│   ├── fig17.15 -> ../ipc2/sendfd2.c
+│   ├── fig17.16 -> ../ipc2/recvfd2.c
+│   ├── fig17.17 -> ../ipc2/open.fe/open.h
+│   ├── fig17.18 -> ../ipc2/open.fe/main.c
+│   ├── fig17.19 -> ../ipc2/open.fe/open.c
+│   ├── fig17.2 -> ../lib/spipe.c
+│   ├── fig17.20 -> ../ipc2/opend.fe/opend.h
+│   ├── fig17.21 -> ../ipc2/opend.fe/main.c
+│   ├── fig17.22 -> ../ipc2/opend.fe/request.c
+│   ├── fig17.23 -> ../lib/bufargs.c
+│   ├── fig17.24 -> ../ipc2/opend.fe/cliargs.c
+│   ├── fig17.25 -> ../ipc2/open/open.c
+│   ├── fig17.26 -> ../ipc2/opend/opend.h
+│   ├── fig17.27 -> ../ipc2/opend/client.c
+│   ├── fig17.28 -> ../ipc2/opend/main.c
+│   ├── fig17.29 -> ../ipc2/opend/loop.select.c
+│   ├── fig17.3 -> ../ipc2/pollmsg.c
+│   ├── fig17.30 -> ../ipc2/opend/loop.poll.c
+│   ├── fig17.31 -> ../ipc2/opend/request.c
+│   ├── fig17.4 -> ../ipc2/sendmsg.c
+│   ├── fig17.5 -> ../ipc2/bindunix.c
+│   ├── fig17.8 -> ../lib/servlisten.c
+│   ├── fig17.9 -> ../lib/servaccept.c
+│   ├── fig1.8 -> ../intro/testerror.c
+│   ├── fig18.10 -> ../termios/settty.c
+│   ├── fig18.11 -> ../termios/csize.c
+│   ├── fig18.12 -> ../termios/ctermid.c
+│   ├── fig18.13 -> ../termios/isatty.c
+│   ├── fig18.14 -> ../termios/t_isatty.c
+│   ├── fig18.15 -> ../termios/ttyname.c
+│   ├── fig18.16 -> ../termios/t_ttyname.c
+│   ├── fig18.17 -> ../termios/getpass.c
+│   ├── fig18.18 -> ../termios/t_getpass.c
+│   ├── fig18.20 -> ../lib/ttymodes.c
+│   ├── fig18.21 -> ../termios/t_raw.c
+│   ├── fig18.22 -> ../termios/winch.c
+│   ├── fig1.9 -> ../intro/uidgid.c
+│   ├── fig19.10 -> ../lib/ptyfork.c
+│   ├── fig19.11 -> ../pty/main.c
+│   ├── fig19.12 -> ../pty/loop.c
+│   ├── fig19.16 -> ../pty/driver.c
+│   ├── fig19.9 -> ../lib/ptyopen.c
+│   ├── fig20.3 -> ../db/t4.c
+│   ├── fig2.13 -> ../standards/makeconf.awk
+│   ├── fig2.14 -> ../standards/conf.c.modified
+│   ├── fig2.16 -> ../lib/pathalloc.c
+│   ├── fig2.17 -> ../lib/openmax.c
+│   ├── fig3.1 -> ../fileio/seek.c
+│   ├── fig3.11 -> ../fileio/fileflags.c
+│   ├── fig3.12 -> ../fileio/setfl.c
+│   ├── fig3.2 -> ../fileio/hole.c
+│   ├── fig3.5 -> ../fileio/mycat.c
+│   ├── fig4.12 -> ../filedir/changemod.c
+│   ├── fig4.16 -> ../filedir/unlink.c
+│   ├── fig4.21 -> ../filedir/zap.c
+│   ├── fig4.22 -> ../filedir/ftw8.c
+│   ├── fig4.23 -> ../filedir/mycd.c
+│   ├── fig4.24 -> ../filedir/cdpwd.c
+│   ├── fig4.25 -> ../filedir/devrdev.c
+│   ├── fig4.3 -> ../filedir/filetype.c
+│   ├── fig4.8 -> ../filedir/access.c
+│   ├── fig4.9 -> ../filedir/umask.c
+│   ├── fig5.11 -> ../stdio/buf.c
+│   ├── fig5.12 -> ../stdio/tempfiles.c
+│   ├── fig5.13 -> ../stdio/mkstemp.c
+│   ├── fig5.15 -> ../stdio/memstr.c
+│   ├── fig5.4 -> ../stdio/getcputc.c
+│   ├── fig5.5 -> ../stdio/fgetsfputs.c
+│   ├── fig6.11 -> ../datafiles/strftime.c
+│   ├── fig6.2 -> ../datafiles/getpwnam.c
+│   ├── fig7.1 -> ../environ/hello1.c
+│   ├── fig7.11 -> ../environ/cmd2.c
+│   ├── fig7.13 -> ../environ/testjmp.c
+│   ├── fig7.14 -> ../environ/opendata.c
+│   ├── fig7.16 -> ../environ/getrlimit.c
+│   ├── fig7.3 -> ../environ/doatexit.c
+│   ├── fig7.4 -> ../environ/echoarg.c
+│   ├── fig7.9 -> ../environ/cmd1.c
+│   ├── fig8.1 -> ../proc/fork1.c
+│   ├── fig8.12 -> ../proc/tellwait1.c
+│   ├── fig8.13 -> ../proc/tellwait2.c
+│   ├── fig8.16 -> ../proc/exec1.c
+│   ├── fig8.17 -> ../proc/echoall.c
+│   ├── fig8.20 -> ../proc/exec2.c
+│   ├── fig8.21 -> ../proc/awkexample
+│   ├── fig8.22 -> ../proc/system.c
+│   ├── fig8.23 -> ../proc/systest1.c
+│   ├── fig8.24 -> ../proc/systest3.c
+│   ├── fig8.25 -> ../proc/pruids.c
+│   ├── fig8.28 -> ../proc/test1.c
+│   ├── fig8.29 -> ../proc/pracct.c
+│   ├── fig8.3 -> ../proc/vfork1.c
+│   ├── fig8.30 -> ../proc/nice.c
+│   ├── fig8.31 -> ../proc/times1.c
+│   ├── fig8.5 -> ../lib/prexit.c
+│   ├── fig8.6 -> ../proc/wait1.c
+│   ├── fig8.8 -> ../proc/fork2.c
+│   ├── fig9.12 -> ../relation/orphan3.c
+│   ├── figB.1 -> ../include/apue.h
+│   ├── figB.3 -> ../lib/error.c
+│   ├── figB.4 -> ../lib/errorlog.c
+│   ├── figC.1 -> ../exercises/openmax.c
+│   ├── figC.10 -> ../exercises/zombie.c
+│   ├── figC.12 -> ../exercises/goodexit.c
+│   ├── figC.13 -> ../exercises/sleep.c
+│   ├── figC.14 -> ../exercises/getlogin.c
+│   ├── figC.15 -> ../exercises/pendlock.c
+│   ├── figC.16 -> ../exercises/sleepus_select.c
+│   ├── figC.17 -> ../exercises/sleepus_poll.c
+│   ├── figC.18 -> ../exercises/sizepipe.c
+│   ├── figC.20 -> ../exercises/fifo1.c
+│   ├── figC.22 -> ../exercises/bo.c
+│   ├── figC.23 -> ../exercises/asyncsocket.c
+│   ├── figC.24 -> ../exercises/pollmsg2.c
+│   ├── figC.3 -> ../exercises/longpath.c
+│   ├── figC.4 -> ../exercises/fmemopen.c
+│   ├── figC.5 -> ../exercises/getpwsvr4.c
+│   ├── figC.6 -> ../exercises/getpw44bsd.c
+│   ├── figC.7 -> ../exercises/prtime.c
+│   └── figC.8 -> ../exercises/vfork3.c
+├── filedir
+│   ├── access.c
+│   ├── cdpwd.c
+│   ├── changemod.c
+│   ├── devrdev.c
+│   ├── filetype.c
+│   ├── ftw8.c
+│   ├── Makefile
+│   ├── mycd.c
+│   ├── umask.c
+│   ├── unlink.c
+│   └── zap.c
+├── fileio
+│   ├── fileflags.c
+│   ├── hole.c
+│   ├── Makefile
+│   ├── mycat.c
+│   ├── seek.c
+│   └── setfl.c
+├── include
+│   └── apue.h
+├── intro
+│   ├── getcputc.c
+│   ├── hello.c
+│   ├── ls1.c
+│   ├── Makefile
+│   ├── mycat.c
+│   ├── shell1.c
+│   ├── shell2.c
+│   ├── testerror.c
+│   └── uidgid.c
+├── ipc1
+│   ├── add2.c
+│   ├── add2stdio.c
+│   ├── devzero.c
+│   ├── Makefile
+│   ├── myuclc.c
+│   ├── pipe1.c
+│   ├── pipe2.c
+│   ├── pipe4.c
+│   ├── popen1.c
+│   ├── popen2.c
+│   ├── popen.c
+│   ├── slock.c
+│   ├── slock.h
+│   ├── tellwait.c
+│   └── tshm.c
+├── ipc2
+│   ├── bindunix.c
+│   ├── Makefile
+│   ├── open
+│   │   ├── main.c
+│   │   ├── Makefile
+│   │   ├── open.c
+│   │   └── open.h
+│   ├── opend
+│   │   ├── cliargs.c
+│   │   ├── client.c
+│   │   ├── loop.poll.c
+│   │   ├── loop.select.c
+│   │   ├── main.c
+│   │   ├── Makefile
+│   │   ├── opend.h
+│   │   └── request.c
+│   ├── opend.fe
+│   │   ├── cliargs.c
+│   │   ├── main.c
+│   │   ├── Makefile
+│   │   ├── opend.h
+│   │   └── request.c
+│   ├── open.fe
+│   │   ├── main.c
+│   │   ├── Makefile
+│   │   ├── open.c
+│   │   └── open.h
+│   ├── pollmsg.c
+│   ├── recvfd2.c
+│   ├── sendfd2.c
+│   └── sendmsg.c
+├── lib
+│   ├── bufargs.c
+│   ├── cliconn.c
+│   ├── clrfl.c
+│   ├── daemonize.c
+│   ├── error.c
+│   ├── errorlog.c
+│   ├── lockreg.c
+│   ├── locktest.c
+│   ├── Makefile
+│   ├── nspipe.c
+│   ├── openmax.c
+│   ├── Orecvfd.c
+│   ├── pathalloc.c
+│   ├── popen.c
+│   ├── prexit.c
+│   ├── prmask.c
+│   ├── ptyfork.c
+│   ├── ptyopen.c
+│   ├── readn.c
+│   ├── recvfd.c
+│   ├── semaph.c
+│   ├── senderr.c
+│   ├── sendfd.c
+│   ├── servaccept.c
+│   ├── servlisten.c
+│   ├── setfd.c
+│   ├── setfl.c
+│   ├── signal.c
+│   ├── signalintr.c
+│   ├── sleep.c
+│   ├── sleepus.c
+│   ├── spipe.c
+│   ├── strerror.c
+│   ├── tellwait.c
+│   ├── ttymodes.c
+│   └── writen.c
+├── Make.defines.freebsd
+├── Make.defines.linux
+├── Make.defines.macos
+├── Make.defines.solaris
+├── Makefile
+├── Make.libapue.inc
+├── printer
+│   ├── ipp.h
+│   ├── Makefile
+│   ├── print.c
+│   ├── printd.c
+│   ├── print.h
+│   └── util.c
+├── proc
+│   ├── awkexample
+│   ├── echoall.c
+│   ├── exec1.c
+│   ├── exec2.c
+│   ├── fork1.c
+│   ├── fork2.c
+│   ├── Makefile
+│   ├── nice.c
+│   ├── pracct.c
+│   ├── pruids.c
+│   ├── system.c
+│   ├── systest1.c
+│   ├── systest3.c
+│   ├── tellwait1.c
+│   ├── tellwait2.c
+│   ├── test1.c
+│   ├── times1.c
+│   ├── vfork1.c
+│   └── wait1.c
+├── pty
+│   ├── driver.c
+│   ├── loop.c
+│   ├── main.c
+│   └── Makefile
+├── README
+├── relation
+│   ├── Makefile
+│   └── orphan3.c
+├── signals
+│   ├── abort.c
+│   ├── child.c
+│   ├── critical.c
+│   ├── Makefile
+│   ├── mask.c
+│   ├── read1.c
+│   ├── read2.c
+│   ├── reenter.c
+│   ├── setops.c
+│   ├── sigtstp.c
+│   ├── sigusr.c
+│   ├── sleep1.c
+│   ├── sleep2.c
+│   ├── suspend1.c
+│   ├── suspend2.c
+│   ├── system.c
+│   ├── systest2.c
+│   └── tsleep2.c
+├── sockets
+│   ├── clconn2.c
+│   ├── clconn.c
+│   ├── findsvc.c
+│   ├── initsrv1.c
+│   ├── initsrv2.c
+│   ├── makefile
+│   ├── ruptime.c
+│   ├── ruptimed.c
+│   ├── ruptimed-dg.c
+│   ├── ruptimed-fd.c
+│   └── ruptime-dg.c
+├── standards
+│   ├── conf.c.modified
+│   ├── makeconf.awk
+│   ├── Makefile
+│   ├── makeopt.awk
+│   ├── pathconf-lim.sym
+│   ├── pathconf-opt.sym
+│   ├── sysconf-lim.sym
+│   └── sysconf-opt.sym
+├── stdio
+│   ├── buf.c
+│   ├── fgetsfputs.c
+│   ├── getcharbug.c
+│   ├── getcputc.c
+│   ├── Makefile
+│   ├── memstr.c
+│   ├── mkstemp.c
+│   └── tempfiles.c
+├── systype.sh
+├── termios
+│   ├── csize.c
+│   ├── ctermid.c
+│   ├── getpass.c
+│   ├── isatty.c
+│   ├── Makefile
+│   ├── settty.c
+│   ├── t_getpass.c
+│   ├── t_isatty.c
+│   ├── t_raw.c
+│   ├── t_ttyname.c
+│   ├── ttyname.c
+│   └── winch.c
+├── threadctl
+│   ├── atfork.c
+│   ├── detach.c
+│   ├── getenv1.c
+│   ├── getenv2.c
+│   ├── getenv3.c
+│   ├── Makefile
+│   ├── suspend.c
+│   └── timeout.c
+└── threads
+    ├── badexit2.c
+    ├── barrier.c
+    ├── cleanup.c
+    ├── condvar.c
+    ├── exitstatus.c
+    ├── Makefile
+    ├── maketimeout.c
+    ├── mutex1.c
+    ├── mutex2.c
+    ├── mutex3.c
+    ├── rwlock.c
+    ├── threadid.c
+    └── timedlock.c
+error.c [error opening dir]
+
+29 directories, 483 files
