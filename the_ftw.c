@@ -27,10 +27,10 @@ int main(int argc,char *argv[])
 	exit(ret);	
 }
 
-#define FTW_F 1
-#define FTW_D 2
-#define FTW_DNR 3
-#define FTW_NS 4
+#define FTW_F 1		//file other than directory
+#define FTW_D 2		//directory
+#define FTW_DNR 3	//directory can't be read
+#define FTW_NS 4	//file we can't stat
 
 static char *fullpath;
 static size_t pathlen;
@@ -38,4 +38,24 @@ static size_t pathlen;
 static int myftw(char *pathname,Myfunc *func)
 {
 	fullpath=path_alloc(&pathlen);
+	
+	if(pathlen<=strlen(pathname))
+	{
+		pathlen=strlen(pathname)*2;
+		if((fullpath=realloc(fullpath,pathlen))==NULL)
+			err_sys("realloc failed");
+	}
+	strcpy(fullpath,pathname);
+	return (dopath(func));
+}
+
+static int dopath(Myfunc* func)
+{
+	struct stat statbuf;
+	struct dirent *dirp;
+	DIR *dp;
+	int ret,n;
+	if(lstat(fullpath,&statbuf)<0)
+		return (func(fullpath,&statbuf,FTW_NS));
+	
 }
