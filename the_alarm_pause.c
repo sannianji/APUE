@@ -1,4 +1,4 @@
-#include "apue.h"
+#include <signal.h>
 #include <unistd.h>
 
 static void sig_alrm(int signo)
