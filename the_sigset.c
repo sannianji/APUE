@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #include<errno.h>
 #include<signal.h>
 
@@ -33,4 +34,14 @@ int sigismember(const sigset_t *set,int signo)
 		return (-1);
 	}
 	return ((*set&(1<<(signo-1)))!=0);
+=======
+#include<signal.h>
+#include<errno.h>
+
+#define SIGBAD(signo) ((signo)<=0||(signo)>NSIG)
+
+int sigaddset(sigset_t *set,int signo)
+{
+	
+>>>>>>> 15bf5919755dcaee5f8bcba27f8d61723b26a69f
 }
