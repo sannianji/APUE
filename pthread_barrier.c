@@ -2,7 +2,8 @@
 #include <pthread.h>
 #include <limits.h>
 #include <sys/time.h>
-#include<math.h>
+#include <math.h>
+#include <stdlib.h>
 
 #define NTHR 8
 #define NUMNUM 8000000L
@@ -13,11 +14,11 @@ long snums[NUMNUM];
 
 pthread_barrier_t b;
 
-#ifdef SOLARIS
+//#ifdef SOLARIS
 #define heapsort qsort
-#else
-extern int heapsort(void *,size_t,size_t,int(*)(const void *,const void *));
-#endif
+//#else
+//extern int heapsort(void *,size_t,size_t,int(*)(const void *,const void *));
+//#endif
 
 int complong(const void *arg1,const void *arg2)
 {
