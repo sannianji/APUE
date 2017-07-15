@@ -24,6 +24,7 @@ pr_mask(const char *str)
 		/* remaining signals can go here  */
 
 		printf("\n");
+		fflush(stdin);
 	}
 
 	errno = errno_save;		/* restore errno */

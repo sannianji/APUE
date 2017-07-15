@@ -11,7 +11,7 @@ int sigaddset(sigset_t *set,int signo)
 		return (-1);
 	}
 
-	*set|=1<<(signo-1);
+	*set =*set|( 1 << (signo-1));
 	return (0);
 }
 
@@ -23,11 +23,11 @@ int sigdelset(sigset_t *set,int signo)
 		return (-1);
 	}
 	
-	*set&=~(1<<(signo-1));
+	*set =*set&( ~(1<<(signo-1)));
 	return (0);
 }
 
-int sigmember(const sigset_t *set)
+int sigismember(const sigset_t *set)
 {
 	if(SIGBAD(signo))
 	{
