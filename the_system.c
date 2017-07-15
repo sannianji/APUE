@@ -1,7 +1,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <unistd.h>
-int systerm(const char *cmdstring)
+int system(const char *cmdstring)
 {
 	pid_t pid;
 	int status;
@@ -12,7 +12,7 @@ int systerm(const char *cmdstring)
 		status=-1;
 	else if(pid==0)
 	{
-		execl("/bin/bash","bahs","-C",cmdstring,(char*)0);
+		execl("/bin/bash","bash","-C",cmdstring,(char*)0);
 		_exit(127);
 	}
 	else 
