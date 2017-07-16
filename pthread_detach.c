@@ -14,15 +14,17 @@ int makethread(void *(*fn)(void *),void *arg)
 	if(err==0)
 		pthread_create(&tid,&attr,fn,arg);
 	pthread_attr_destroy(&attr);
-	return err;
+	return (err);
 }
 
 void* thrfn(void* a)
 {
-	setbuf(stdout,NULL);
-	printf("create detach thread success\n");
-	fflush(stdout);
-//	write(STDIN_FILENO,"create detach thread success write\n",100);
+//	setbuf(stdout,NULL);
+//	printf("create detach thread success\n");
+//	fflush(stdout);
+	char *s="create detach thread success write\n";
+	if(write(STDIN_FILENO,s,strlen(s))!=strlen(s))
+		err_sys("write");
 }
 
 int main()
@@ -30,5 +32,6 @@ int main()
 	int a;
 	a=makethread(&thrfn,NULL);
 	printf("%d\n",a);
+	sleep(2);
 	return 0;
 }
