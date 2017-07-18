@@ -71,5 +71,7 @@ void daemonize(const char *cmd)
 
 int main(void)
 {
+	printf("start the daemonize\n");
 	daemonize("sannianji");
+	printf("finish the daemonize\n");
 }
