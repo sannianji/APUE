@@ -8,8 +8,11 @@ int main(void)
 	char line[MAXLINE];
 	
 	if(signal(SIGPIPE,sig_pipe)==SIG_ERR)
-		err_sys("pipe error");
+		err_sys("signal error");
 	
+	if(pipe(fd1)<0||pipe(fd2)<0)
+		err_sys("pipe error");
+
 	if((pid=fork())<0)
 		err_sys("fork error");
 	else if(pid>0)
@@ -35,7 +38,7 @@ int main(void)
 		}
 
 		if(ferror(stdin))
-			err_sys("fgets error on stdin");
+			err_sys("fgets error on stdin here");
 		exit(0);
 	}
 	else
@@ -56,8 +59,8 @@ int main(void)
 			close(fd2[1]);
 		}
 
-	if(execl("./the_add","the_add",(char *)0)<0)
-		err_sys("execl error");
+		if(execl("/home/sannian/apue/the_add","the_add",(char *)0)<0)
+			err_sys("execl error");
 	}
 
 	exit(0);
