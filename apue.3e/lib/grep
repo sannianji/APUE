@@ -1,0 +1,1996 @@
+#include "apue.h"
+
+#define	MAXARGC		50	/* max number of arguments in buf */
+#define	WHITE	" \t\n"	/* white space for tokenizing arguments */
+
+/*
+ * buf[] contains white-space-separated arguments.  We convert it to an
+ * argv-style array of pointers, and call the user's function (optfunc)
+ * to process the array.  We return -1 if there's a problem parsing buf,
+ * else we return whatever optfunc() returns.  Note that user's buf[]
+ * array is modified (nulls placed after each token).
+ */
+int
+buf_args(char *buf, int (*optfunc)(int, char **))
+{
+	char	*ptr, *argv[MAXARGC];
+	int		argc;
+
+	if (strtok(buf, WHITE) == NULL)		/* an argv[0] is required */
+		return(-1);
+	argv[argc = 0] = buf;
+	while ((ptr = strtok(NULL, WHITE)) != NULL) {
+		if (++argc >= MAXARGC-1)	/* -1 for room for NULL at end */
+			return(-1);
+		argv[argc] = ptr;
+	}
+	argv[++argc] = NULL;
+
+	/*
+	 * Since argv[] pointers point into the user's buf[],
+	 * user's function can just copy the pointers, even
+	 * though argv[] array will disappear on return.
+	 */
+	return((*optfunc)(argc, argv));
+}
+#include "apue.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <errno.h>
+
+#define	CLI_PATH	"/var/tmp/"
+#define	CLI_PERM	S_IRWXU			/* rwx for user only */
+
+/*
+ * Create a client endpoint and connect to a server.
+ * Returns fd if all OK, <0 on error.
+ */
+int
+cli_conn(const char *name)
+{
+	int					fd, len, err, rval;
+	struct sockaddr_un	un, sun;
+	int					do_unlink = 0;
+
+	if (strlen(name) >= sizeof(un.sun_path)) {
+		errno = ENAMETOOLONG;
+		return(-1);
+	}
+
+	/* create a UNIX domain stream socket */
+	if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+		return(-1);
+
+	/* fill socket address structure with our address */
+	memset(&un, 0, sizeof(un));
+	un.sun_family = AF_UNIX;
+	sprintf(un.sun_path, "%s%05ld", CLI_PATH, (long)getpid());
+printf("file is %s\n", un.sun_path);
+	len = offsetof(struct sockaddr_un, sun_path) + strlen(un.sun_path);
+
+	unlink(un.sun_path);		/* in case it already exists */
+	if (bind(fd, (struct sockaddr *)&un, len) < 0) {
+		rval = -2;
+		goto errout;
+	}
+	if (chmod(un.sun_path, CLI_PERM) < 0) {
+		rval = -3;
+		do_unlink = 1;
+		goto errout;
+	}
+
+	/* fill socket address structure with server's address */
+	memset(&sun, 0, sizeof(sun));
+	sun.sun_family = AF_UNIX;
+	strcpy(sun.sun_path, name);
+	len = offsetof(struct sockaddr_un, sun_path) + strlen(name);
+	if (connect(fd, (struct sockaddr *)&sun, len) < 0) {
+		rval = -4;
+		do_unlink = 1;
+		goto errout;
+	}
+	return(fd);
+
+errout:
+	err = errno;
+	close(fd);
+	if (do_unlink)
+		unlink(un.sun_path);
+	errno = err;
+	return(rval);
+}
+#include "apue.h"
+#include <fcntl.h>
+
+void
+clr_fl(int fd, int flags)
+				/* flags are the file status flags to turn off */
+{
+	int		val;
+
+	if ((val = fcntl(fd, F_GETFL, 0)) < 0)
+		err_sys("fcntl F_GETFL error");
+
+	val &= ~flags;		/* turn flags off */
+
+	if (fcntl(fd, F_SETFL, val) < 0)
+		err_sys("fcntl F_SETFL error");
+}
+#include "apue.h"
+#include <syslog.h>
+#include <fcntl.h>
+#include <sys/resource.h>
+
+void
+daemonize(const char *cmd)
+{
+	int i, fd0, fd1, fd2;
+	pid_t pid;
+	struct rlimit rl;
+	struct sigaction sa;
+
+	/*
+	 * Clear file creation mask.
+	 */
+	umask(0);
+
+	/*
+	 * Get maximum number of file descriptors.
+	 */
+	if (getrlimit(RLIMIT_NOFILE, &rl) < 0)
+		err_quit("%s: can't get file limit", cmd);
+
+	/*
+	 * Become a session leader to lose controlling TTY.
+	 */
+	if ((pid = fork()) < 0)
+		err_quit("%s: can't fork", cmd);
+	else if (pid != 0) /* parent */
+		exit(0);
+	setsid();
+
+	/*
+	 * Ensure future opens won't allocate controlling TTYs.
+	 */
+	sa.sa_handler = SIG_IGN;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if (sigaction(SIGHUP, &sa, NULL) < 0)
+		err_quit("%s: can't ignore SIGHUP", cmd);
+	if ((pid = fork()) < 0)
+		err_quit("%s: can't fork", cmd);
+	else if (pid != 0) /* parent */
+		exit(0);
+
+	/*
+	 * Change the current working directory to the root so
+	 * we won't prevent file systems from being unmounted.
+	 */
+	if (chdir("/") < 0)
+		err_quit("%s: can't change directory to /", cmd);
+
+	/*
+	 * Close all open file descriptors.
+	 */
+	if (rl.rlim_max == RLIM_INFINITY)
+		rl.rlim_max = 1024;
+	for (i = 0; i < rl.rlim_max; i++)
+		close(i);
+
+	/*
+	 * Attach file descriptors 0, 1, and 2 to /dev/null.
+	 */
+	fd0 = open("/dev/null", O_RDWR);
+	fd1 = dup(0);
+	fd2 = dup(0);
+
+	/*
+	 * Initialize the log file.
+	 */
+	openlog(cmd, LOG_CONS, LOG_DAEMON);
+	if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
+		syslog(LOG_ERR, "unexpected file descriptors %d %d %d",
+		  fd0, fd1, fd2);
+		exit(1);
+	}
+}
+#include "apue.h"
+#include <errno.h>		/* for definition of errno */
+#include <stdarg.h>		/* ISO C variable aruments */
+
+static void	err_doit(int, int, const char *, va_list);
+
+/*
+ * Nonfatal error related to a system call.
+ * Print a message and return.
+ */
+void
+err_ret(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	err_doit(1, errno, fmt, ap);
+	va_end(ap);
+}
+
+/*
+ * Fatal error related to a system call.
+ * Print a message and terminate.
+ */
+void
+err_sys(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	err_doit(1, errno, fmt, ap);
+	va_end(ap);
+	exit(1);
+}
+
+/*
+ * Nonfatal error unrelated to a system call.
+ * Error code passed as explict parameter.
+ * Print a message and return.
+ */
+void
+err_cont(int error, const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	err_doit(1, error, fmt, ap);
+	va_end(ap);
+}
+
+/*
+ * Fatal error unrelated to a system call.
+ * Error code passed as explict parameter.
+ * Print a message and terminate.
+ */
+void
+err_exit(int error, const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	err_doit(1, error, fmt, ap);
+	va_end(ap);
+	exit(1);
+}
+
+/*
+ * Fatal error related to a system call.
+ * Print a message, dump core, and terminate.
+ */
+void
+err_dump(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	err_doit(1, errno, fmt, ap);
+	va_end(ap);
+	abort();		/* dump core and terminate */
+	exit(1);		/* shouldn't get here */
+}
+
+/*
+ * Nonfatal error unrelated to a system call.
+ * Print a message and return.
+ */
+void
+err_msg(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	err_doit(0, 0, fmt, ap);
+	va_end(ap);
+}
+
+/*
+ * Fatal error unrelated to a system call.
+ * Print a message and terminate.
+ */
+void
+err_quit(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	err_doit(0, 0, fmt, ap);
+	va_end(ap);
+	exit(1);
+}
+
+/*
+ * Print a message and return to caller.
+ * Caller specifies "errnoflag".
+ */
+static void
+err_doit(int errnoflag, int error, const char *fmt, va_list ap)
+{
+	char	buf[MAXLINE];
+
+	vsnprintf(buf, MAXLINE-1, fmt, ap);
+	if (errnoflag)
+		snprintf(buf+strlen(buf), MAXLINE-strlen(buf)-1, ": %s",
+		  strerror(error));
+	strcat(buf, "\n");
+	fflush(stdout);		/* in case stdout and stderr are the same */
+	fputs(buf, stderr);
+	fflush(NULL);		/* flushes all stdio output streams */
+}
+/*
+ * Error routines for programs that can run as a daemon.
+ */
+
+#include "apue.h"
+#include <errno.h>		/* for definition of errno */
+#include <stdarg.h>		/* ISO C variable arguments */
+#include <syslog.h>
+
+static void	log_doit(int, int, int, const char *, va_list ap);
+
+/*
+ * Caller must define and set this: nonzero if
+ * interactive, zero if daemon
+ */
+extern int	log_to_stderr;
+
+/*
+ * Initialize syslog(), if running as daemon.
+ */
+void
+log_open(const char *ident, int option, int facility)
+{
+	if (log_to_stderr == 0)
+		openlog(ident, option, facility);
+}
+
+/*
+ * Nonfatal error related to a system call.
+ * Print a message with the system's errno value and return.
+ */
+void
+log_ret(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	log_doit(1, errno, LOG_ERR, fmt, ap);
+	va_end(ap);
+}
+
+/*
+ * Fatal error related to a system call.
+ * Print a message and terminate.
+ */
+void
+log_sys(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	log_doit(1, errno, LOG_ERR, fmt, ap);
+	va_end(ap);
+	exit(2);
+}
+
+/*
+ * Nonfatal error unrelated to a system call.
+ * Print a message and return.
+ */
+void
+log_msg(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	log_doit(0, 0, LOG_ERR, fmt, ap);
+	va_end(ap);
+}
+
+/*
+ * Fatal error unrelated to a system call.
+ * Print a message and terminate.
+ */
+void
+log_quit(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	log_doit(0, 0, LOG_ERR, fmt, ap);
+	va_end(ap);
+	exit(2);
+}
+
+/*
+ * Fatal error related to a system call.
+ * Error number passed as an explicit parameter.
+ * Print a message and terminate.
+ */
+void
+log_exit(int error, const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	log_doit(1, error, LOG_ERR, fmt, ap);
+	va_end(ap);
+	exit(2);
+}
+
+/*
+ * Print a message and return to caller.
+ * Caller specifies "errnoflag" and "priority".
+ */
+static void
+log_doit(int errnoflag, int error, int priority, const char *fmt,
+         va_list ap)
+{
+	char	buf[MAXLINE];
+
+	vsnprintf(buf, MAXLINE-1, fmt, ap);
+	if (errnoflag)
+		snprintf(buf+strlen(buf), MAXLINE-strlen(buf)-1, ": %s",
+		  strerror(error));
+	strcat(buf, "\n");
+	if (log_to_stderr) {
+		fflush(stdout);
+		fputs(buf, stderr);
+		fflush(stderr);
+	} else {
+		syslog(priority, "%s", buf);
+	}
+}
+#include "apue.h"
+#include <fcntl.h>
+
+int
+lock_reg(int fd, int cmd, int type, off_t offset, int whence, off_t len)
+{
+	struct flock	lock;
+
+	lock.l_type = type;		/* F_RDLCK, F_WRLCK, F_UNLCK */
+	lock.l_start = offset;	/* byte offset, relative to l_whence */
+	lock.l_whence = whence;	/* SEEK_SET, SEEK_CUR, SEEK_END */
+	lock.l_len = len;		/* #bytes (0 means to EOF) */
+
+	return(fcntl(fd, cmd, &lock));
+}
+#include "apue.h"
+#include <fcntl.h>
+
+pid_t
+lock_test(int fd, int type, off_t offset, int whence, off_t len)
+{
+	struct flock	lock;
+
+	lock.l_type = type;		/* F_RDLCK or F_WRLCK */
+	lock.l_start = offset;	/* byte offset, relative to l_whence */
+	lock.l_whence = whence;	/* SEEK_SET, SEEK_CUR, SEEK_END */
+	lock.l_len = len;		/* #bytes (0 means to EOF) */
+
+	if (fcntl(fd, F_GETLK, &lock) < 0)
+		err_sys("fcntl error");
+
+	if (lock.l_type == F_UNLCK)
+		return(0);		/* false, region isn't locked by another proc */
+	return(lock.l_pid);	/* true, return pid of lock owner */
+}
+#
+# Makefile for misc library.
+#
+ROOT=..
+PLATFORM=$(shell $(ROOT)/systype.sh)
+include $(ROOT)/Make.defines.$(PLATFORM)
+
+LIBMISC	= libapue.a
+OBJS   = bufargs.o cliconn.o clrfl.o \
+			daemonize.o error.o errorlog.o lockreg.o locktest.o \
+			openmax.o pathalloc.o popen.o prexit.o prmask.o \
+			ptyfork.o ptyopen.o readn.o recvfd.o senderr.o sendfd.o \
+			servaccept.o servlisten.o setfd.o setfl.o signal.o signalintr.o \
+			sleepus.o spipe.o tellwait.o ttymodes.o writen.o
+
+all:	$(LIBMISC) sleep.o
+
+$(LIBMISC):	$(OBJS)
+	$(AR) rv $(LIBMISC) $?
+	$(RANLIB) $(LIBMISC)
+
+
+clean:
+	rm -f *.o a.out core temp.* $(LIBMISC)
+
+include $(ROOT)/Make.libapue.inc
+/* Create a named stream pipe.  Called by server on initialization. */
+
+#include "apue.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+
+int			/* returns 0 if all OK, -1 if error (with errno set) */
+ns_pipe(const char *name, int fd[2])
+{
+	int					len;
+	struct sockaddr_un	unix_addr;
+
+	if (fd_pipe(fd) < 0)		/* create unnamed stream pipe */
+		return(-1);
+
+	unlink(name);	/* remove the name, if it already exists */
+
+	memset(&unix_addr, 0, sizeof(unix_addr));
+	unix_addr.sun_family = AF_UNIX;
+	strcpy(unix_addr.sun_path, name);
+	len = strlen(unix_addr.sun_path) + sizeof(unix_addr.sun_family);
+
+	return(bind(fd[0], (struct sockaddr *) &unix_addr, len));
+						/* fd[0] has the name bound to it */
+}
+#include "apue.h"
+#include <errno.h>
+#include <limits.h>
+
+#ifdef	OPEN_MAX
+static long	openmax = OPEN_MAX;
+#else
+static long	openmax = 0;
+#endif
+
+/*
+ * If OPEN_MAX is indeterminate, this might be inadequate.
+ */
+#define	OPEN_MAX_GUESS	256
+
+long
+open_max(void)
+{
+	if (openmax == 0) {		/* first time through */
+		errno = 0;
+		if ((openmax = sysconf(_SC_OPEN_MAX)) < 0) {
+			if (errno == 0)
+				openmax = OPEN_MAX_GUESS;	/* it's indeterminate */
+			else
+				err_sys("sysconf error for _SC_OPEN_MAX");
+		}
+	}
+	return(openmax);
+}
+#include "apue.h"
+#include <sys/socket.h>		/* struct msghdr */
+
+/* size of control buffer to send/recv one file descriptor */
+#define	CONTROLLEN	CMSG_LEN(sizeof(int))
+
+static struct cmsghdr	*cmptr = NULL;		/* malloc'ed first time */
+
+/*
+ * Receive a file descriptor from a server process.  Also, any data
+ * received is passed to (*userfunc)(STDERR_FILENO, buf, nbytes).
+ * We have a 2-byte protocol for receiving the fd from send_fd().
+ */
+int
+recv_fd(int fd, ssize_t (*userfunc)(int, const void *, size_t))
+{
+	int				newfd, nr, status;
+	char			*ptr;
+	char			buf[MAXLINE];
+	struct iovec	iov[1];
+	struct msghdr	msg;
+
+	status = -1;
+	for ( ; ; ) {
+		iov[0].iov_base = buf;
+		iov[0].iov_len  = sizeof(buf);
+		msg.msg_iov     = iov;
+		msg.msg_iovlen  = 1;
+		msg.msg_name    = NULL;
+		msg.msg_namelen = 0;
+		if (cmptr == NULL && (cmptr = malloc(CONTROLLEN)) == NULL)
+			return(-1);
+		msg.msg_control    = cmptr;
+		msg.msg_controllen = CONTROLLEN;
+		if ((nr = recvmsg(fd, &msg, 0)) < 0) {
+			err_ret("recvmsg error");
+			return(-1);
+		} else if (nr == 0) {
+			err_ret("connection closed by server");
+			return(-1);
+		}
+
+		/*
+		 * See if this is the final data with null & status.  Null
+		 * is next to last byte of buffer; status byte is last byte.
+		 * Zero status means there is a file descriptor to receive.
+		 */
+		for (ptr = buf; ptr < &buf[nr]; ) {
+			if (*ptr++ == 0) {
+				if (ptr != &buf[nr-1])
+					err_dump("message format error");
+ 				status = *ptr & 0xFF;	/* prevent sign extension */
+ 				if (status == 0) {
+					if (msg.msg_controllen != CONTROLLEN)
+						err_dump("status = 0 but no fd");
+					newfd = *(int *)CMSG_DATA(cmptr);
+				} else {
+					newfd = -status;
+				}
+				nr -= 2;
+			}
+		}
+		if (nr > 0 && (*userfunc)(STDERR_FILENO, buf, nr) != nr)
+			return(-1);
+		if (status >= 0)	/* final data has arrived */
+			return(newfd);	/* descriptor, or -status */
+	}
+}
+#include "apue.h"
+#include <errno.h>
+#include <limits.h>
+
+#ifdef	PATH_MAX
+static long	pathmax = PATH_MAX;
+#else
+static long	pathmax = 0;
+#endif
+
+static long	posix_version = 0;
+static long	xsi_version = 0;
+
+/* If PATH_MAX is indeterminate, no guarantee this is adequate */
+#define	PATH_MAX_GUESS	1024
+
+char *
+path_alloc(size_t *sizep) /* also return allocated size, if nonnull */
+{
+	char	*ptr;
+	size_t	size;
+
+	if (posix_version == 0)
+		posix_version = sysconf(_SC_VERSION);
+
+	if (xsi_version == 0)
+		xsi_version = sysconf(_SC_XOPEN_VERSION);
+
+	if (pathmax == 0) {		/* first time through */
+		errno = 0;
+		if ((pathmax = pathconf("/", _PC_PATH_MAX)) < 0) {
+			if (errno == 0)
+				pathmax = PATH_MAX_GUESS;	/* it's indeterminate */
+			else
+				err_sys("pathconf error for _PC_PATH_MAX");
+		} else {
+			pathmax++;		/* add one since it's relative to root */
+		}
+	}
+
+	/*
+	 * Before POSIX.1-2001, we aren't guaranteed that PATH_MAX includes
+	 * the terminating null byte.  Same goes for XPG3.
+	 */
+	if ((posix_version < 200112L) && (xsi_version < 4))
+		size = pathmax + 1;
+	else
+		size = pathmax;
+
+	if ((ptr = malloc(size)) == NULL)
+		err_sys("malloc error for pathname");
+
+	if (sizep != NULL)
+		*sizep = size;
+	return(ptr);
+}
+#include "apue.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+
+/*
+ * Pointer to array allocated at run-time.
+ */
+static pid_t	*childpid = NULL;
+
+/*
+ * From our open_max(), {Prog openmax}.
+ */
+static int		maxfd;
+
+FILE *
+popen(const char *cmdstring, const char *type)
+{
+	int		i;
+	int		pfd[2];
+	pid_t	pid;
+	FILE	*fp;
+
+	/* only allow "r" or "w" */
+	if ((type[0] != 'r' && type[0] != 'w') || type[1] != 0) {
+		errno = EINVAL;
+		return(NULL);
+	}
+
+	if (childpid == NULL) {		/* first time through */
+		/* allocate zeroed out array for child pids */
+		maxfd = open_max();
+		if ((childpid = calloc(maxfd, sizeof(pid_t))) == NULL)
+			return(NULL);
+	}
+
+	if (pipe(pfd) < 0)
+		return(NULL);	/* errno set by pipe() */
+	if (pfd[0] >= maxfd || pfd[1] >= maxfd) {
+		close(pfd[0]);
+		close(pfd[1]);
+		errno = EMFILE;
+		return(NULL);
+	}
+
+	if ((pid = fork()) < 0) {
+		return(NULL);	/* errno set by fork() */
+	} else if (pid == 0) {							/* child */
+		if (*type == 'r') {
+			close(pfd[0]);
+			if (pfd[1] != STDOUT_FILENO) {
+				dup2(pfd[1], STDOUT_FILENO);
+				close(pfd[1]);
+			}
+		} else {
+			close(pfd[1]);
+			if (pfd[0] != STDIN_FILENO) {
+				dup2(pfd[0], STDIN_FILENO);
+				close(pfd[0]);
+			}
+		}
+
+		/* close all descriptors in childpid[] */
+		for (i = 0; i < maxfd; i++)
+			if (childpid[i] > 0)
+				close(i);
+
+		execl("/bin/sh", "sh", "-c", cmdstring, (char *)0);
+		_exit(127);
+	}
+
+	/* parent continues... */
+	if (*type == 'r') {
+		close(pfd[1]);
+		if ((fp = fdopen(pfd[0], type)) == NULL)
+			return(NULL);
+	} else {
+		close(pfd[0]);
+		if ((fp = fdopen(pfd[1], type)) == NULL)
+			return(NULL);
+	}
+
+	childpid[fileno(fp)] = pid;	/* remember child pid for this fd */
+	return(fp);
+}
+
+int
+pclose(FILE *fp)
+{
+	int		fd, stat;
+	pid_t	pid;
+
+	if (childpid == NULL) {
+		errno = EINVAL;
+		return(-1);		/* popen() has never been called */
+	}
+
+	fd = fileno(fp);
+	if (fd >= maxfd) {
+		errno = EINVAL;
+		return(-1);		/* invalid file descriptor */
+	}
+	if ((pid = childpid[fd]) == 0) {
+		errno = EINVAL;
+		return(-1);		/* fp wasn't opened by popen() */
+	}
+
+	childpid[fd] = 0;
+	if (fclose(fp) == EOF)
+		return(-1);
+
+	while (waitpid(pid, &stat, 0) < 0)
+		if (errno != EINTR)
+			return(-1);	/* error other than EINTR from waitpid() */
+
+	return(stat);	/* return child's termination status */
+}
+#include "apue.h"
+#include <sys/wait.h>
+
+void
+pr_exit(int status)
+{
+	if (WIFEXITED(status))
+		printf("normal termination, exit status = %d\n",
+				WEXITSTATUS(status));
+	else if (WIFSIGNALED(status))
+		printf("abnormal termination, signal number = %d%s\n",
+				WTERMSIG(status),
+#ifdef	WCOREDUMP
+				WCOREDUMP(status) ? " (core file generated)" : "");
+#else
+				"");
+#endif
+	else if (WIFSTOPPED(status))
+		printf("child stopped, signal number = %d\n",
+				WSTOPSIG(status));
+}
+#include "apue.h"
+#include <errno.h>
+
+void
+pr_mask(const char *str)
+{
+	sigset_t	sigset;
+	int			errno_save;
+
+	errno_save = errno;		/* we can be called by signal handlers */
+	if (sigprocmask(0, NULL, &sigset) < 0) {
+		err_ret("sigprocmask error");
+	} else {
+		printf("%s", str);
+		if (sigismember(&sigset, SIGINT))
+			printf(" SIGINT");
+		if (sigismember(&sigset, SIGQUIT))
+			printf(" SIGQUIT");
+		if (sigismember(&sigset, SIGUSR1))
+			printf(" SIGUSR1");
+		if (sigismember(&sigset, SIGALRM))
+			printf(" SIGALRM");
+
+		/* remaining signals can go here  */
+
+		printf("\n");
+	}
+
+	errno = errno_save;		/* restore errno */
+}
+#include "apue.h"
+#include <termios.h>
+
+pid_t
+pty_fork(int *ptrfdm, char *slave_name, int slave_namesz,
+		 const struct termios *slave_termios,
+		 const struct winsize *slave_winsize)
+{
+	int		fdm, fds;
+	pid_t	pid;
+	char	pts_name[20];
+
+	if ((fdm = ptym_open(pts_name, sizeof(pts_name))) < 0)
+		err_sys("can't open master pty: %s, error %d", pts_name, fdm);
+
+	if (slave_name != NULL) {
+		/*
+		 * Return name of slave.  Null terminate to handle case
+		 * where strlen(pts_name) > slave_namesz.
+		 */
+		strncpy(slave_name, pts_name, slave_namesz);
+		slave_name[slave_namesz - 1] = '\0';
+	}
+
+	if ((pid = fork()) < 0) {
+		return(-1);
+	} else if (pid == 0) {		/* child */
+		if (setsid() < 0)
+			err_sys("setsid error");
+
+		/*
+		 * System V acquires controlling terminal on open().
+		 */
+		if ((fds = ptys_open(pts_name)) < 0)
+			err_sys("can't open slave pty");
+		close(fdm);		/* all done with master in child */
+
+#if	defined(BSD)
+		/*
+		 * TIOCSCTTY is the BSD way to acquire a controlling terminal.
+		 */
+		if (ioctl(fds, TIOCSCTTY, (char *)0) < 0)
+			err_sys("TIOCSCTTY error");
+#endif
+		/*
+		 * Set slave's termios and window size.
+		 */
+		if (slave_termios != NULL) {
+			if (tcsetattr(fds, TCSANOW, slave_termios) < 0)
+				err_sys("tcsetattr error on slave pty");
+		}
+		if (slave_winsize != NULL) {
+			if (ioctl(fds, TIOCSWINSZ, slave_winsize) < 0)
+				err_sys("TIOCSWINSZ error on slave pty");
+		}
+
+		/*
+		 * Slave becomes stdin/stdout/stderr of child.
+		 */
+		if (dup2(fds, STDIN_FILENO) != STDIN_FILENO)
+			err_sys("dup2 error to stdin");
+		if (dup2(fds, STDOUT_FILENO) != STDOUT_FILENO)
+			err_sys("dup2 error to stdout");
+		if (dup2(fds, STDERR_FILENO) != STDERR_FILENO)
+			err_sys("dup2 error to stderr");
+		if (fds != STDIN_FILENO && fds != STDOUT_FILENO &&
+		  fds != STDERR_FILENO)
+			close(fds);
+		return(0);		/* child returns 0 just like fork() */
+	} else {					/* parent */
+		*ptrfdm = fdm;	/* return fd of master */
+		return(pid);	/* parent returns pid of child */
+	}
+}
+#include "apue.h"
+#include <errno.h>
+#include <fcntl.h>
+#if defined(SOLARIS)
+#include <stropts.h>
+#endif
+
+int
+ptym_open(char *pts_name, int pts_namesz)
+{
+	char	*ptr;
+	int		fdm, err;
+
+	if ((fdm = posix_openpt(O_RDWR)) < 0)
+		return(-1);
+	if (grantpt(fdm) < 0)		/* grant access to slave */
+		goto errout;
+	if (unlockpt(fdm) < 0)		/* clear slave's lock flag */
+		goto errout;
+	if ((ptr = ptsname(fdm)) == NULL)	/* get slave's name */
+		goto errout;
+
+	/*
+	 * Return name of slave.  Null terminate to handle
+	 * case where strlen(ptr) > pts_namesz.
+	 */
+	strncpy(pts_name, ptr, pts_namesz);
+	pts_name[pts_namesz - 1] = '\0';
+	return(fdm);			/* return fd of master */
+errout:
+	err = errno;
+	close(fdm);
+	errno = err;
+	return(-1);
+}
+
+int
+ptys_open(char *pts_name)
+{
+	int fds;
+#if defined(SOLARIS)
+	int err, setup;
+#endif
+
+	if ((fds = open(pts_name, O_RDWR)) < 0)
+		return(-1);
+
+#if defined(SOLARIS)
+	/*
+	 * Check if stream is already set up by autopush facility.
+	 */
+	if ((setup = ioctl(fds, I_FIND, "ldterm")) < 0)
+		goto errout;
+
+	if (setup == 0) {
+		if (ioctl(fds, I_PUSH, "ptem") < 0)
+			goto errout;
+		if (ioctl(fds, I_PUSH, "ldterm") < 0)
+			goto errout;
+		if (ioctl(fds, I_PUSH, "ttcompat") < 0) {
+errout:
+			err = errno;
+			close(fds);
+			errno = err;
+			return(-1);
+		}
+	}
+#endif
+	return(fds);
+}
+#include "apue.h"
+
+ssize_t             /* Read "n" bytes from a descriptor  */
+readn(int fd, void *ptr, size_t n)
+{
+	size_t		nleft;
+	ssize_t		nread;
+
+	nleft = n;
+	while (nleft > 0) {
+		if ((nread = read(fd, ptr, nleft)) < 0) {
+			if (nleft == n)
+				return(-1); /* error, return -1 */
+			else
+				break;      /* error, return amount read so far */
+		} else if (nread == 0) {
+			break;          /* EOF */
+		}
+		nleft -= nread;
+		ptr   += nread;
+	}
+	return(n - nleft);      /* return >= 0 */
+}
+#include "apue.h"
+#include <sys/socket.h>		/* struct msghdr */
+
+/* size of control buffer to send/recv one file descriptor */
+#define	CONTROLLEN	CMSG_LEN(sizeof(int))
+
+#ifdef LINUX
+#define RELOP <
+#else
+#define RELOP !=
+#endif
+
+static struct cmsghdr	*cmptr = NULL;		/* malloc'ed first time */
+
+/*
+ * Receive a file descriptor from a server process.  Also, any data
+ * received is passed to (*userfunc)(STDERR_FILENO, buf, nbytes).
+ * We have a 2-byte protocol for receiving the fd from send_fd().
+ */
+int
+recv_fd(int fd, ssize_t (*userfunc)(int, const void *, size_t))
+{
+	int				newfd, nr, status;
+	char			*ptr;
+	char			buf[MAXLINE];
+	struct iovec	iov[1];
+	struct msghdr	msg;
+
+	status = -1;
+	for ( ; ; ) {
+		iov[0].iov_base = buf;
+		iov[0].iov_len  = sizeof(buf);
+		msg.msg_iov     = iov;
+		msg.msg_iovlen  = 1;
+		msg.msg_name    = NULL;
+		msg.msg_namelen = 0;
+		if (cmptr == NULL && (cmptr = malloc(CONTROLLEN)) == NULL)
+			return(-1);
+		msg.msg_control    = cmptr;
+		msg.msg_controllen = CONTROLLEN;
+		if ((nr = recvmsg(fd, &msg, 0)) < 0) {
+			err_ret("recvmsg error");
+			return(-1);
+		} else if (nr == 0) {
+			err_ret("connection closed by server");
+			return(-1);
+		}
+
+		/*
+		 * See if this is the final data with null & status.  Null
+		 * is next to last byte of buffer; status byte is last byte.
+		 * Zero status means there is a file descriptor to receive.
+		 */
+		for (ptr = buf; ptr < &buf[nr]; ) {
+			if (*ptr++ == 0) {
+				if (ptr != &buf[nr-1])
+					err_dump("message format error");
+ 				status = *ptr & 0xFF;	/* prevent sign extension */
+ 				if (status == 0) {
+					if (msg.msg_controllen RELOP CONTROLLEN)
+						err_dump("status = 0 but no fd");
+					newfd = *(int *)CMSG_DATA(cmptr);
+				} else {
+					newfd = -status;
+				}
+				nr -= 2;
+			}
+		}
+		if (nr > 0 && (*userfunc)(STDERR_FILENO, buf, nr) != nr)
+			return(-1);
+		if (status >= 0)	/* final data has arrived */
+			return(newfd);	/* descriptor, or -status */
+	}
+}
+/*
+ * Provide an simpler and easier to understand interface to the System V
+ * semaphore system calls.  There are 7 routines available to the user:
+ *
+ *	id = sem_create(key, initval);	# create with initial value or open
+ *	id = sem_open(key);		# open (must already exist)
+ *	sem_wait(id);			# wait = P = down by 1
+ *	sem_signal(id);			# signal = V = up by 1
+ *	sem_op(id, amount);		# wait   if (amount < 0)
+ *					# signal if (amount > 0)
+ *	sem_close(id);			# close
+ *	sem_rm(id);			# remove (delete)
+ *
+ * We create and use a 3-member set for the requested semaphore.
+ * The first member, [0], is the actual semaphore value, and the second
+ * member, [1], is a counter used to know when all processes have finished
+ * with the semaphore.  The counter is initialized to a large number,
+ * decremented on every create or open and incremented on every close.
+ * This way we can use the "adjust" feature provided by System V so that
+ * any process that exit's without calling sem_close() is accounted
+ * for.  It doesn't help us if the last process does this (as we have
+ * no way of getting control to remove the semaphore) but it will
+ * work if any process other than the last does an exit (intentional
+ * or unintentional).
+ * The third member, [2], of the semaphore set is used as a lock variable
+ * to avoid any race conditions in the sem_create() and sem_close()
+ * functions.
+ */
+
+#include "apue.h"
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <errno.h>
+
+void	sem_op(int, int);
+int		sem_create(key_t, int);
+int		sem_open(key_t);
+void	sem_rm(int);
+void	sem_close(int);
+void	sem_wait(int);
+void	sem_signal(int);
+
+#define	BIGCOUNT	10000		/* initial value of process counter */
+
+/*
+ * Define the semaphore operation arrays for the semop() calls.
+ */
+
+static struct sembuf	op_lock[2] = {
+	{2, 0, 0},	/* wait for [2] (lock) to equal 0 */
+	{2, 1, SEM_UNDO}	/* then increment [2] to 1 - this locks it */
+			/* UNDO to release the lock if processes exits
+			   before explicitly unlocking */
+};
+
+static struct sembuf	op_endcreate[2] = {
+	{1, -1, SEM_UNDO},/* decrement [1] (proc counter) with undo on exit */
+			/* UNDO to adjust proc counter if process exits
+			   before explicitly calling sem_close() */
+	{2, -1, SEM_UNDO}	/* then decrement [2] (lock) back to 0 */
+};
+
+static struct sembuf	op_open[1] = {
+	{1, -1, SEM_UNDO}	/* decrement [1] (proc counter) with undo on exit */
+};
+
+static struct sembuf	op_close[3] = {
+	{2, 0, 0},	/* wait for [2] (lock) to equal 0 */
+	{2, 1, SEM_UNDO},	/* then increment [2] to 1 - this locks it */
+	{1, 1, SEM_UNDO}	/* then increment [1] (proc counter) */
+};
+
+static struct sembuf	op_unlock[1] = {
+	{2, -1, SEM_UNDO}	/* decrement [2] (lock) back to 0 */
+};
+
+static struct sembuf	op_op[1] = {
+	{0, 99, SEM_UNDO}	/* decrement or increment [0] with undo on exit */
+			/* the 99 is set to the actual amount to add
+			   or subtract (positive or negative) */
+};
+
+/****************************************************************************
+ * Create a semaphore with a specified initial value.
+ * If the semaphore already exists, we don't initialize it (of course).
+ * We return the semaphore ID if all OK, else -1.
+ */
+
+int
+sem_create(key_t key, int initval)
+{
+	register int		id, semval;
+	union semun {
+		int		val;
+		struct semid_ds	*buf;
+		unsigned short		*array;
+	} semctl_arg;
+
+	if (key == IPC_PRIVATE)
+		return(-1);	/* not intended for private semaphores */
+
+	else if (key == (key_t) -1)
+		return(-1);	/* probably an ftok() error by caller */
+
+again:
+	if ((id = semget(key, 3, 0666 | IPC_CREAT)) < 0)
+		return(-1);	/* permission problem or tables full */
+
+	/*
+	 * When the semaphore is created, we know that the value of all
+	 * 3 members is 0.
+	 * Get a lock on the semaphore by waiting for [2] to equal 0,
+	 * then increment it.
+	 *
+	 * There is a race condition here.  There is a possibility that
+	 * between the semget() above and the semop() below, another
+	 * process can call our sem_close() function which can remove
+	 * the semaphore if that process is the last one using it.
+	 * Therefore, we handle the error condition of an invalid
+	 * semaphore ID specially below, and if it does happen, we just
+	 * go back and create it again.
+	 */
+
+	if (semop(id, &op_lock[0], 2) < 0) {
+		if (errno == EINVAL)
+			goto again;
+		err_sys("can't lock");
+	}
+
+	/*
+	 * Get the value of the process counter.  If it equals 0,
+	 * then no one has initialized the semaphore yet.
+	 */
+
+	if ((semval = semctl(id, 1, GETVAL, 0)) < 0)
+		err_sys("can't GETVAL");
+
+	if (semval == 0) {
+		/*
+		 * We could initialize by doing a SETALL, but that
+		 * would clear the adjust value that we set when we
+		 * locked the semaphore above.  Instead, we'll do 2
+		 * system calls to initialize [0] and [1].
+		 */
+
+		semctl_arg.val = initval;
+		if (semctl(id, 0, SETVAL, semctl_arg) < 0)
+			err_sys("can SETVAL[0]");
+
+		semctl_arg.val = BIGCOUNT;
+		if (semctl(id, 1, SETVAL, semctl_arg) < 0)
+			err_sys("can SETVAL[1]");
+	}
+
+	/*
+	 * Decrement the process counter and then release the lock.
+	 */
+
+	if (semop(id, &op_endcreate[0], 2) < 0)
+		err_sys("can't end create");
+
+	return(id);
+}
+
+/****************************************************************************
+ * Open a semaphore that must already exist.
+ * This function should be used, instead of sem_create(), if the caller
+ * knows that the semaphore must already exist.  For example a client
+ * from a client-server pair would use this, if its the server's
+ * responsibility to create the semaphore.
+ * We return the semaphore ID if all OK, else -1.
+ */
+
+int
+sem_open(key_t key)
+{
+	register int	id;
+
+	if (key == IPC_PRIVATE)
+		return(-1);	/* not intended for private semaphores */
+
+	else if (key == (key_t) -1)
+		return(-1);	/* probably an ftok() error by caller */
+
+	if ((id = semget(key, 3, 0)) < 0)
+		return(-1);	/* doesn't exist, or tables full */
+
+	/*
+	 * Decrement the process counter.  We don't need a lock
+	 * to do this.
+	 */
+
+	if (semop(id, &op_open[0], 1) < 0)
+		err_sys("can't open");
+
+	return(id);
+}
+
+/****************************************************************************
+ * Remove a semaphore.
+ * This call is intended to be called by a server, for example,
+ * when it is being shut down, as we do an IPC_RMID on the semaphore,
+ * regardless whether other processes may be using it or not.
+ * Most other processes should use sem_close() below.
+ */
+
+void
+sem_rm(int id)
+{
+	if (semctl(id, 0, IPC_RMID, 0) < 0)
+		err_sys("can't IPC_RMID");
+}
+
+/****************************************************************************
+ * Close a semaphore.
+ * Unlike the remove function above, this function is for a process
+ * to call before it exits, when it is done with the semaphore.
+ * We "decrement" the counter of processes using the semaphore, and
+ * if this was the last one, we can remove the semaphore.
+ */
+
+void
+sem_close(int id)
+{
+	register int	semval;
+
+	/*
+	 * The following semop() first gets a lock on the semaphore,
+	 * then increments [1] - the process counter.
+	 */
+
+	if (semop(id, &op_close[0], 3) < 0)
+		err_sys("can't semop");
+
+	/*
+	 * Now that we have a lock, read the value of the process
+	 * counter to see if this is the last reference to the
+	 * semaphore.
+	 * There is a race condition here - see the comments in
+	 * sem_create().
+	 */
+
+	if ((semval = semctl(id, 1, GETVAL, 0)) < 0)
+		err_sys("can't GETVAL");
+
+	if (semval > BIGCOUNT)
+		err_dump("sem[1] > BIGCOUNT");
+	else if (semval == BIGCOUNT)
+		sem_rm(id);
+	else
+		if (semop(id, &op_unlock[0], 1) < 0)
+			err_sys("can't unlock");	/* unlock */
+}
+
+/****************************************************************************
+ * Wait until a semaphore's value is greater than 0, then decrement
+ * it by 1 and return.
+ * Dijkstra's P operation.  Tanenbaum's DOWN operation.
+ */
+
+void
+sem_wait(int id)
+{
+	sem_op(id, -1);
+}
+
+/****************************************************************************
+ * Increment a semaphore by 1.
+ * Dijkstra's V operation.  Tanenbaum's UP operation.
+ */
+
+void
+sem_signal(int id)
+{
+	sem_op(id, 1);
+}
+
+/****************************************************************************
+ * General semaphore operation.  Increment or decrement by a user-specified
+ * amount (positive or negative; amount can't be zero).
+ */
+
+void
+sem_op(int id, int value)
+{
+	if ((op_op[0].sem_op = value) == 0)
+		err_sys("can't have value == 0");
+
+	if (semop(id, &op_op[0], 1) < 0)
+		err_sys("sem_op error");
+}
+#include "apue.h"
+
+/*
+ * Used when we had planned to send an fd using send_fd(),
+ * but encountered an error instead.  We send the error back
+ * using the send_fd()/recv_fd() protocol.
+ */
+int
+send_err(int fd, int errcode, const char *msg)
+{
+	int		n;
+
+	if ((n = strlen(msg)) > 0)
+		if (writen(fd, msg, n) != n)	/* send the error message */
+			return(-1);
+
+	if (errcode >= 0)
+		errcode = -1;	/* must be negative */
+
+	if (send_fd(fd, errcode) < 0)
+		return(-1);
+
+	return(0);
+}
+#include "apue.h"
+#include <sys/socket.h>
+
+/* size of control buffer to send/recv one file descriptor */
+#define	CONTROLLEN	CMSG_LEN(sizeof(int))
+
+static struct cmsghdr	*cmptr = NULL;	/* malloc'ed first time */
+
+/*
+ * Pass a file descriptor to another process.
+ * If fd<0, then -fd is sent back instead as the error status.
+ */
+int
+send_fd(int fd, int fd_to_send)
+{
+	struct iovec	iov[1];
+	struct msghdr	msg;
+	char			buf[2];	/* send_fd()/recv_fd() 2-byte protocol */
+
+	iov[0].iov_base = buf;
+	iov[0].iov_len  = 2;
+	msg.msg_iov     = iov;
+	msg.msg_iovlen  = 1;
+	msg.msg_name    = NULL;
+	msg.msg_namelen = 0;
+
+	if (fd_to_send < 0) {
+		msg.msg_control    = NULL;
+		msg.msg_controllen = 0;
+		buf[1] = -fd_to_send;	/* nonzero status means error */
+		if (buf[1] == 0)
+			buf[1] = 1;	/* -256, etc. would screw up protocol */
+	} else {
+		if (cmptr == NULL && (cmptr = malloc(CONTROLLEN)) == NULL)
+			return(-1);
+		cmptr->cmsg_level  = SOL_SOCKET;
+		cmptr->cmsg_type   = SCM_RIGHTS;
+		cmptr->cmsg_len    = CONTROLLEN;
+		msg.msg_control    = cmptr;
+		msg.msg_controllen = CONTROLLEN;
+		*(int *)CMSG_DATA(cmptr) = fd_to_send;		/* the fd to pass */
+		buf[1] = 0;		/* zero status means OK */
+	}
+
+	buf[0] = 0;			/* null byte flag to recv_fd() */
+	if (sendmsg(fd, &msg, 0) != 2)
+		return(-1);
+	return(0);
+}
+#include "apue.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <time.h>
+#include <errno.h>
+
+#define	STALE	30	/* client's name can't be older than this (sec) */
+
+/*
+ * Wait for a client connection to arrive, and accept it.
+ * We also obtain the client's user ID from the pathname
+ * that it must bind before calling us.
+ * Returns new fd if all OK, <0 on error
+ */
+int
+serv_accept(int listenfd, uid_t *uidptr)
+{
+	int					clifd, err, rval;
+	socklen_t			len;
+	time_t				staletime;
+	struct sockaddr_un	un;
+	struct stat			statbuf;
+	char				*name;
+
+	/* allocate enough space for longest name plus terminating null */
+	if ((name = malloc(sizeof(un.sun_path + 1))) == NULL)
+		return(-1);
+	len = sizeof(un);
+	if ((clifd = accept(listenfd, (struct sockaddr *)&un, &len)) < 0) {
+		free(name);
+		return(-2);		/* often errno=EINTR, if signal caught */
+	}
+
+	/* obtain the client's uid from its calling address */
+	len -= offsetof(struct sockaddr_un, sun_path); /* len of pathname */
+	memcpy(name, un.sun_path, len);
+	name[len] = 0;			/* null terminate */
+	if (stat(name, &statbuf) < 0) {
+		rval = -3;
+		goto errout;
+	}
+
+#ifdef	S_ISSOCK	/* not defined for SVR4 */
+	if (S_ISSOCK(statbuf.st_mode) == 0) {
+		rval = -4;		/* not a socket */
+		goto errout;
+	}
+#endif
+
+	if ((statbuf.st_mode & (S_IRWXG | S_IRWXO)) ||
+		(statbuf.st_mode & S_IRWXU) != S_IRWXU) {
+		  rval = -5;	/* is not rwx------ */
+		  goto errout;
+	}
+
+	staletime = time(NULL) - STALE;
+	if (statbuf.st_atime < staletime ||
+		statbuf.st_ctime < staletime ||
+		statbuf.st_mtime < staletime) {
+		  rval = -6;	/* i-node is too old */
+		  goto errout;
+	}
+
+	if (uidptr != NULL)
+		*uidptr = statbuf.st_uid;	/* return uid of caller */
+	unlink(name);		/* we're done with pathname now */
+	free(name);
+	return(clifd);
+
+errout:
+	err = errno;
+	close(clifd);
+	free(name);
+	errno = err;
+	return(rval);
+}
+#include "apue.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <errno.h>
+
+#define QLEN	10
+
+/*
+ * Create a server endpoint of a connection.
+ * Returns fd if all OK, <0 on error.
+ */
+int
+serv_listen(const char *name)
+{
+	int					fd, len, err, rval;
+	struct sockaddr_un	un;
+
+	if (strlen(name) >= sizeof(un.sun_path)) {
+		errno = ENAMETOOLONG;
+		return(-1);
+	}
+
+	/* create a UNIX domain stream socket */
+	if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+		return(-2);
+
+	unlink(name);	/* in case it already exists */
+
+	/* fill in socket address structure */
+	memset(&un, 0, sizeof(un));
+	un.sun_family = AF_UNIX;
+	strcpy(un.sun_path, name);
+	len = offsetof(struct sockaddr_un, sun_path) + strlen(name);
+
+	/* bind the name to the descriptor */
+	if (bind(fd, (struct sockaddr *)&un, len) < 0) {
+		rval = -3;
+		goto errout;
+	}
+
+	if (listen(fd, QLEN) < 0) {	/* tell kernel we're a server */
+		rval = -4;
+		goto errout;
+	}
+	return(fd);
+
+errout:
+	err = errno;
+	close(fd);
+	errno = err;
+	return(rval);
+}
+#include "apue.h"
+#include <fcntl.h>
+
+int
+set_cloexec(int fd)
+{
+	int		val;
+
+	if ((val = fcntl(fd, F_GETFD, 0)) < 0)
+		return(-1);
+
+	val |= FD_CLOEXEC;		/* enable close-on-exec */
+
+	return(fcntl(fd, F_SETFD, val));
+}
+#include "apue.h"
+#include <fcntl.h>
+
+void
+set_fl(int fd, int flags) /* flags are file status flags to turn on */
+{
+	int		val;
+
+	if ((val = fcntl(fd, F_GETFL, 0)) < 0)
+		err_sys("fcntl F_GETFL error");
+
+	val |= flags;		/* turn on flags */
+
+	if (fcntl(fd, F_SETFL, val) < 0)
+		err_sys("fcntl F_SETFL error");
+}
+#include "apue.h"
+
+/* Reliable version of signal(), using POSIX sigaction().  */
+Sigfunc *
+signal(int signo, Sigfunc *func)
+{
+	struct sigaction	act, oact;
+
+	act.sa_handler = func;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+	if (signo == SIGALRM) {
+#ifdef	SA_INTERRUPT
+		act.sa_flags |= SA_INTERRUPT;
+#endif
+	} else {
+		act.sa_flags |= SA_RESTART;
+	}
+	if (sigaction(signo, &act, &oact) < 0)
+		return(SIG_ERR);
+	return(oact.sa_handler);
+}
+#include "apue.h"
+
+Sigfunc *
+signal_intr(int signo, Sigfunc *func)
+{
+	struct sigaction	act, oact;
+
+	act.sa_handler = func;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+#ifdef	SA_INTERRUPT
+	act.sa_flags |= SA_INTERRUPT;
+#endif
+	if (sigaction(signo, &act, &oact) < 0)
+		return(SIG_ERR);
+	return(oact.sa_handler);
+}
+#include "apue.h"
+
+static void
+sig_alrm(int signo)
+{
+	/* nothing to do, just returning wakes up sigsuspend() */
+}
+
+unsigned int
+sleep(unsigned int seconds)
+{
+	struct sigaction	newact, oldact;
+	sigset_t			newmask, oldmask, suspmask;
+	unsigned int		unslept;
+
+	/* set our handler, save previous information */
+	newact.sa_handler = sig_alrm;
+	sigemptyset(&newact.sa_mask);
+	newact.sa_flags = 0;
+	sigaction(SIGALRM, &newact, &oldact);
+
+	/* block SIGALRM and save current signal mask */
+	sigemptyset(&newmask);
+	sigaddset(&newmask, SIGALRM);
+	sigprocmask(SIG_BLOCK, &newmask, &oldmask);
+
+	alarm(seconds);
+	suspmask = oldmask;
+
+	/* make sure SIGALRM isn't blocked */
+	sigdelset(&suspmask, SIGALRM);
+
+	/* wait for any signal to be caught */
+	sigsuspend(&suspmask);
+
+	/* some signal has been caught, SIGALRM is now blocked */
+
+	unslept = alarm(0);
+
+	/* reset previous action */
+	sigaction(SIGALRM, &oldact, NULL);
+
+	/* reset signal mask, which unblocks SIGALRM */
+	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+	return(unslept);
+}
+#include "apue.h"
+#include <sys/time.h>
+
+void
+sleep_us(unsigned int nusecs)
+{
+	struct timeval	tval;
+
+	tval.tv_sec = nusecs / 1000000;
+	tval.tv_usec = nusecs % 1000000;
+	select(0, NULL, NULL, NULL, &tval);
+}
+#include "apue.h"
+#include <sys/socket.h>
+
+/*
+ * Returns a full-duplex pipe (a UNIX domain socket) with
+ * the two file descriptors returned in fd[0] and fd[1].
+ */
+int
+fd_pipe(int fd[2])
+{
+	return(socketpair(AF_UNIX, SOCK_STREAM, 0, fd));
+}
+#include	<stdio.h>
+
+#ifndef LINUX
+extern char	*sys_errlist[];
+extern int	sys_nerr;
+#endif
+
+char *
+strerror(int error)
+{
+	static char	mesg[30];
+
+	if (error >= 0 && error <= sys_nerr)
+		return((char *)sys_errlist[error]);
+
+	sprintf(mesg, "Unknown error (%d)", error);
+	return(mesg);
+}
+#include "apue.h"
+
+static volatile sig_atomic_t sigflag; /* set nonzero by sig handler */
+static sigset_t newmask, oldmask, zeromask;
+
+static void
+sig_usr(int signo)	/* one signal handler for SIGUSR1 and SIGUSR2 */
+{
+	sigflag = 1;
+}
+
+void
+TELL_WAIT(void)
+{
+	if (signal(SIGUSR1, sig_usr) == SIG_ERR)
+		err_sys("signal(SIGUSR1) error");
+	if (signal(SIGUSR2, sig_usr) == SIG_ERR)
+		err_sys("signal(SIGUSR2) error");
+	sigemptyset(&zeromask);
+	sigemptyset(&newmask);
+	sigaddset(&newmask, SIGUSR1);
+	sigaddset(&newmask, SIGUSR2);
+
+	/* Block SIGUSR1 and SIGUSR2, and save current signal mask */
+	if (sigprocmask(SIG_BLOCK, &newmask, &oldmask) < 0)
+		err_sys("SIG_BLOCK error");
+}
+
+void
+TELL_PARENT(pid_t pid)
+{
+	kill(pid, SIGUSR2);		/* tell parent we're done */
+}
+
+void
+WAIT_PARENT(void)
+{
+	while (sigflag == 0)
+		sigsuspend(&zeromask);	/* and wait for parent */
+	sigflag = 0;
+
+	/* Reset signal mask to original value */
+	if (sigprocmask(SIG_SETMASK, &oldmask, NULL) < 0)
+		err_sys("SIG_SETMASK error");
+}
+
+void
+TELL_CHILD(pid_t pid)
+{
+	kill(pid, SIGUSR1);			/* tell child we're done */
+}
+
+void
+WAIT_CHILD(void)
+{
+	while (sigflag == 0)
+		sigsuspend(&zeromask);	/* and wait for child */
+	sigflag = 0;
+
+	/* Reset signal mask to original value */
+	if (sigprocmask(SIG_SETMASK, &oldmask, NULL) < 0)
+		err_sys("SIG_SETMASK error");
+}
+#include "apue.h"
+#include <termios.h>
+#include <errno.h>
+
+static struct termios		save_termios;
+static int					ttysavefd = -1;
+static enum { RESET, RAW, CBREAK }	ttystate = RESET;
+
+int
+tty_cbreak(int fd)	/* put terminal into a cbreak mode */
+{
+	int				err;
+	struct termios	buf;
+
+	if (ttystate != RESET) {
+		errno = EINVAL;
+		return(-1);
+	}
+	if (tcgetattr(fd, &buf) < 0)
+		return(-1);
+	save_termios = buf;	/* structure copy */
+
+	/*
+	 * Echo off, canonical mode off.
+	 */
+	buf.c_lflag &= ~(ECHO | ICANON);
+
+	/*
+	 * Case B: 1 byte at a time, no timer.
+	 */
+	buf.c_cc[VMIN] = 1;
+	buf.c_cc[VTIME] = 0;
+	if (tcsetattr(fd, TCSAFLUSH, &buf) < 0)
+		return(-1);
+
+	/*
+	 * Verify that the changes stuck.  tcsetattr can return 0 on
+	 * partial success.
+	 */
+	if (tcgetattr(fd, &buf) < 0) {
+		err = errno;
+		tcsetattr(fd, TCSAFLUSH, &save_termios);
+		errno = err;
+		return(-1);
+	}
+	if ((buf.c_lflag & (ECHO | ICANON)) || buf.c_cc[VMIN] != 1 ||
+	  buf.c_cc[VTIME] != 0) {
+		/*
+		 * Only some of the changes were made.  Restore the
+		 * original settings.
+		 */
+		tcsetattr(fd, TCSAFLUSH, &save_termios);
+		errno = EINVAL;
+		return(-1);
+	}
+
+	ttystate = CBREAK;
+	ttysavefd = fd;
+	return(0);
+}
+
+int
+tty_raw(int fd)		/* put terminal into a raw mode */
+{
+	int				err;
+	struct termios	buf;
+
+	if (ttystate != RESET) {
+		errno = EINVAL;
+		return(-1);
+	}
+	if (tcgetattr(fd, &buf) < 0)
+		return(-1);
+	save_termios = buf;	/* structure copy */
+
+	/*
+	 * Echo off, canonical mode off, extended input
+	 * processing off, signal chars off.
+	 */
+	buf.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+
+	/*
+	 * No SIGINT on BREAK, CR-to-NL off, input parity
+	 * check off, don't strip 8th bit on input, output
+	 * flow control off.
+	 */
+	buf.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+
+	/*
+	 * Clear size bits, parity checking off.
+	 */
+	buf.c_cflag &= ~(CSIZE | PARENB);
+
+	/*
+	 * Set 8 bits/char.
+	 */
+	buf.c_cflag |= CS8;
+
+	/*
+	 * Output processing off.
+	 */
+	buf.c_oflag &= ~(OPOST);
+
+	/*
+	 * Case B: 1 byte at a time, no timer.
+	 */
+	buf.c_cc[VMIN] = 1;
+	buf.c_cc[VTIME] = 0;
+	if (tcsetattr(fd, TCSAFLUSH, &buf) < 0)
+		return(-1);
+
+	/*
+	 * Verify that the changes stuck.  tcsetattr can return 0 on
+	 * partial success.
+	 */
+	if (tcgetattr(fd, &buf) < 0) {
+		err = errno;
+		tcsetattr(fd, TCSAFLUSH, &save_termios);
+		errno = err;
+		return(-1);
+	}
+	if ((buf.c_lflag & (ECHO | ICANON | IEXTEN | ISIG)) ||
+	  (buf.c_iflag & (BRKINT | ICRNL | INPCK | ISTRIP | IXON)) ||
+	  (buf.c_cflag & (CSIZE | PARENB | CS8)) != CS8 ||
+	  (buf.c_oflag & OPOST) || buf.c_cc[VMIN] != 1 ||
+	  buf.c_cc[VTIME] != 0) {
+		/*
+		 * Only some of the changes were made.  Restore the
+		 * original settings.
+		 */
+		tcsetattr(fd, TCSAFLUSH, &save_termios);
+		errno = EINVAL;
+		return(-1);
+	}
+
+	ttystate = RAW;
+	ttysavefd = fd;
+	return(0);
+}
+
+int
+tty_reset(int fd)		/* restore terminal's mode */
+{
+	if (ttystate == RESET)
+		return(0);
+	if (tcsetattr(fd, TCSAFLUSH, &save_termios) < 0)
+		return(-1);
+	ttystate = RESET;
+	return(0);
+}
+
+void
+tty_atexit(void)		/* can be set up by atexit(tty_atexit) */
+{
+	if (ttysavefd >= 0)
+		tty_reset(ttysavefd);
+}
+
+struct termios *
+tty_termios(void)		/* let caller see original tty state */
+{
+	return(&save_termios);
+}
+#include "apue.h"
+
+ssize_t             /* Write "n" bytes to a descriptor  */
+writen(int fd, const void *ptr, size_t n)
+{
+	size_t		nleft;
+	ssize_t		nwritten;
+
+	nleft = n;
+	while (nleft > 0) {
+		if ((nwritten = write(fd, ptr, nleft)) < 0) {
+			if (nleft == n)
+				return(-1); /* error, return -1 */
+			else
+				break;      /* error, return amount written so far */
+		} else if (nwritten == 0) {
+			break;
+		}
+		nleft -= nwritten;
+		ptr   += nwritten;
+	}
+	return(n - nleft);      /* return >= 0 */
+}
